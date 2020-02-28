@@ -1,4 +1,8 @@
-mport json
+# Door Bell Lambda Handler
+# Nandor Szots
+# nandor@ntsj.com
+
+import json
 import os
 import urllib.parse
 import boto3
