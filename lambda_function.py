@@ -13,18 +13,18 @@ http = urllib3.PoolManager()
 
 print('Loading function')
 
-s3 = boto3.client('s3')
+s3          = boto3.client('s3')
 rekognition = boto3.client('rekognition')
-dynamodb = boto3.client('dynamodb')
+dynamodb    = boto3.client('dynamodb')
 
-ACCESS_TOKEN = os.environ['ACCESS_TOKEN']  # Slack OAuth access token from environment variables
-SLACK_CHANNEL = os.environ['SLACK_CHANNEL']  # Slack OAuth access token from environment variables
-COLLECTION_NAME = os.environ['COLLECTION_NAME']
+ACCESS_TOKEN    = os.environ['ACCESS_TOKEN']    # Slack OAuth access token from environment variables
+SLACK_CHANNEL   = os.environ['SLACK_CHANNEL']   # Slack Channel to post to
+COLLECTION_NAME = os.environ['COLLECTION_NAME'] # Rekognition Collection Name
 
 def lambda_handler(event, context):
     #print("Received event: " + json.dumps(event, indent=2))
 
-    # Get the object from the event and show its content type
+    #Get the object from the event and show its content type
     bucket = event['Records'][0]['s3']['bucket']['name']
     
     key = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'], encoding='utf-8')
@@ -39,7 +39,7 @@ def lambda_handler(event, context):
     img_data = response['Body'].read()
     
     hash = hashlib.md5(img_data)
-    print(hash.hexdigest())
+    #print(hash.hexdigest())
     
     if have_proccessed_hash( str( hash.hexdigest() ) ):
         print ("Already processed this image hash.")
@@ -47,17 +47,17 @@ def lambda_handler(event, context):
     
     update_proccessed_hash(str(hash.hexdigest()))
     
-    print ("DOING OBJ DETECTION")
+    #print ("DOING OBJ DETECTION")
     msg = detect_objs( img_data )
     msg += "\n"
     
-    print ("DOING FACE DETECTION")
+    #print ("DOING FACE DETECTION")
     msg += detect_faces( img_data )
     
-    print ("POSTING TO SLACK")
+    #print ("POSTING TO SLACK")
     post_image( SLACK_CHANNEL, msg, img_data )
 
-    print ("DONE")
+    #print ("DONE")
     return True
     
 def update_proccessed_hash(hash):
@@ -114,6 +114,7 @@ def detect_faces(image_bytes):
         ret += 'No faces found.'
 
     return ret
+    
 def detect_objs(image_bytes):
     ret = ""
     try:
