@@ -41,6 +41,10 @@ def lambda_handler(event, context):
     hash = hashlib.md5(img_data)
     #print(hash.hexdigest())
     
+    # lambda has an annoying habit of being fired multiple times for the same event (due to timeouts etc)
+    # net-net this means your event might end up succeeding late and multiple times which is annoying and expensive
+    # since this isnt mission-critical we just store the md5 hash of every image we have seen and never process the same 
+    # request twice.
     if have_proccessed_hash( str( hash.hexdigest() ) ):
         print ("Already processed this image hash.")
         return True;
@@ -94,11 +98,14 @@ def detect_faces(image_bytes):
     except Exception as e:
         print(e)
         ret += 'No faces found.'
-        print('Unable to detect labels for image.')
+        #print('Unable to detect labels for image.')
         return ret
         
-    print(response['FaceMatches'])
+    #print(response['FaceMatches'])
     
+    # Just take the first face found and print it.  It is also possible to print every face found but 
+    # I seemed to get the same person multiple times that way and I havent debugged why yet.
+    # I think overlaying boxes with names on the image would be a cool way to go and might be a great v2 feature.
     if len(response['FaceMatches']) > 0:
         match = response['FaceMatches'][0]
         face = dynamodb.get_item(
@@ -140,27 +147,6 @@ def detect_objs(image_bytes):
         
     return ret
     
-def post_message(channel, message):
-    """ Posts message to Slack channel via Slack API.
-    Args:
-        channel (string): Channel, private group, or IM channel to send message to. Can be an encoded ID, or a name.
-        message (string): Message to post to channel
-    Returns:
-        (None)
-    """
-    url = 'https://slack.com/api/chat.postMessage'
-    data = urllib.parse.urlencode(
-        (
-            ("token", ACCESS_TOKEN),
-            ("channel", channel),
-            ("text", message)
-        )
-    )
-    data = data.encode("ascii")
-    headers = {"Content-Type": "application/x-www-form-urlencoded"}
-    request = urllib.request.Request(url, data, headers)
-    urllib.request.urlopen(request)
-    
 def post_image(channel, msg, img):
     """ Posts img to Slack channel via Slack API.
     Args:
@@ -183,7 +169,7 @@ def post_image(channel, msg, img):
                         'token': ACCESS_TOKEN,
                         'channels': channel,
                         'initial_comment': msg,
-                        'file': ( 'FrontDoor.jpg', img, 'image/jpeg' )
+                        'file': ( 'Camera.jpg', img, 'image/jpeg' )
                       })
     
     print( r.data )
