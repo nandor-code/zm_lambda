@@ -177,7 +177,6 @@ def post_image(channel, msg, img):
     values = { 'token': ACCESS_TOKEN,
                'channels': channel }
 
-    #r = requests.post(url, files=files, data=values)
     r = http.request( 'POST',
                       url,
                       fields={
