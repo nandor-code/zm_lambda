@@ -8,6 +8,7 @@ import urllib.parse
 import boto3
 import urllib3
 import hashlib
+import cv2
 
 http = urllib3.PoolManager()
 
@@ -23,10 +24,9 @@ COLLECTION_NAME = os.environ['COLLECTION_NAME'] # Rekognition Collection Name
 
 def lambda_handler(event, context):
     #print("Received event: " + json.dumps(event, indent=2))
-
     #Get the object from the event and show its content type
     bucket = event['Records'][0]['s3']['bucket']['name']
-    
+
     key = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'], encoding='utf-8')
     
     try:
@@ -52,13 +52,14 @@ def lambda_handler(event, context):
     update_proccessed_hash(str(hash.hexdigest()))
     
     #print ("DOING OBJ DETECTION")
-    msg = detect_objs( img_data )
+    msg, objects = detect_objs( img_data )
     msg += "\n"
     
     #print ("DOING FACE DETECTION")
-    msg += detect_faces( img_data )
+    msg, person, faces = detect_faces( img_data, msg )
     
     #print ("POSTING TO SLACK")
+    img_data = annotate_img(img_data, person, faces, objects)
     post_image( SLACK_CHANNEL, msg, img_data )
 
     #print ("DONE")
@@ -85,8 +86,10 @@ def have_proccessed_hash(hash):
     else:
         return False
     
-def detect_faces(image_bytes):
-    ret = 'People: '
+def detect_faces(image_bytes, msg):
+    faces = {}
+    person = "Unknown Person"
+    ret = msg + 'People: '
     try:
         response = rekognition.search_faces_by_image(
             CollectionId='ntsj_collection',
@@ -99,15 +102,16 @@ def detect_faces(image_bytes):
         print(e)
         ret += 'No faces found.'
         #print('Unable to detect labels for image.')
-        return ret
+        return ret, person, faces
         
-    #print(response['FaceMatches'])
+    #print(response)
     
     # Just take the first face found and print it.  It is also possible to print every face found but 
     # I seemed to get the same person multiple times that way and I havent debugged why yet.
     # I think overlaying boxes with names on the image would be a cool way to go and might be a great v2 feature.
-    if len(response['FaceMatches']) > 0:
-        match = response['FaceMatches'][0]
+    faces = response['FaceMatches']
+    if len(faces) > 0:
+        match = faces[0]
         face = dynamodb.get_item(
             TableName=COLLECTION_NAME,  
             Key={'RekognitionId': {'S': match['Face']['FaceId']}}
@@ -115,15 +119,17 @@ def detect_faces(image_bytes):
             
         if 'Item' in face:
             ret += (face['Item']['FullName']['S']) + " (" + str(int(match['Face']['Confidence'])) + "%) "
+            person = face['Item']['FullName']['S']
         else:
             ret += ('Unknown Person')                
     else:
         ret += 'No faces found.'
 
-    return ret
+    return ret, person, response
     
 def detect_objs(image_bytes):
     ret = ""
+    labels = {}
     try:
         response = rekognition.detect_labels(
             Image={
@@ -136,8 +142,9 @@ def detect_objs(image_bytes):
         print(e)
         ret += "None objects found."
         print('Unable to detect labels for image.')
-        return ret
-        
+        return ret, labels
+    
+    #print( response )
     labels = response['Labels']
     for label in labels:
         if len(ret) > 0:
@@ -145,7 +152,7 @@ def detect_objs(image_bytes):
         else:
             ret += "Objects: " + label['Name']
         
-    return ret
+    return ret, response
     
 def post_image(channel, msg, img):
     """ Posts img to Slack channel via Slack API.
@@ -173,3 +180,37 @@ def post_image(channel, msg, img):
                       })
     
     print( r.data )
+
+def annotate_img(img_data, person, faces, objects):
+    
+    if( len(faces) == 0 ):
+        return img_data
+    
+    tmp_filename='/tmp/my_image.jpg'
+    f = open(tmp_filename, "wb")
+    f.write(img_data)
+    f.close()
+    
+    src_image  = cv2.imread(tmp_filename)
+    
+    height = src_image.shape[0]
+    width  = src_image.shape[1]
+    
+    left_face = faces["SearchedFaceBoundingBox"]["Left"] * width
+    top_face  = faces["SearchedFaceBoundingBox"]["Top"]  * height
+
+    right_face  = left_face + ( faces["SearchedFaceBoundingBox"]["Width"]  * width )
+    bottom_face = top_face  + ( faces["SearchedFaceBoundingBox"]["Height"] * height )
+    #print(faces)
+    print(objects)
+    
+    # Highlight their mug
+    cv2.rectangle(src_image, (int(left_face), int(top_face)), (int(right_face), int(bottom_face)), (255, 0, 255), 2)
+    
+    # Label it.
+    cv2.putText(src_image, person, (int(left_face), int(top_face-20)), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 255), 2)
+
+    encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
+    result, img_data = cv2.imencode('.jpg', src_image, encode_param)
+    
+    return img_data
