@@ -104,6 +104,7 @@ def detect_faces(image_bytes, msg):
     try:
         response = rekognition.search_faces_by_image(
             CollectionId='ntsj_collection',
+            QualityFilter="AUTO",
             Image={
                 'Bytes': image_bytes,
             }
