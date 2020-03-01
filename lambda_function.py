@@ -73,12 +73,11 @@ def lambda_handler(event, context):
     
 def update_proccessed_hash(hash):
     print ("Updating DB with hash: " + hash)
-    object.ttlattribute = 1641600 + long(time.time())
     response = dynamodb.put_item(
         TableName='processed_image_hashes',
         Item={
             'hash': {'S': hash},
-            'ttl':{'S': long(time.time())}
+            'ttl':{'S': int(time.time())}
             }
         )
     print(response)
