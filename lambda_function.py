@@ -77,7 +77,7 @@ def update_proccessed_hash(hash):
         TableName='processed_image_hashes',
         Item={
             'hash': {'S': hash},
-            'ttl':{'S': int(time.time())}
+            'ttl':{'N': int(time.time())}
             }
         )
     print(response)
