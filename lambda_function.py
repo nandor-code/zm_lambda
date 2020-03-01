@@ -9,6 +9,7 @@ import boto3
 import urllib3
 import hashlib
 import cv2
+import time; 
 
 colors = {'blue': (255, 0, 0), 'green': (0, 255, 0), 'red': (0, 0, 255), 
           'yellow': (0, 255, 255),'magenta': (255, 0, 255), 
@@ -72,10 +73,12 @@ def lambda_handler(event, context):
     
 def update_proccessed_hash(hash):
     print ("Updating DB with hash: " + hash)
+    object.ttlattribute = 1641600 + long(time.time())
     response = dynamodb.put_item(
         TableName='processed_image_hashes',
         Item={
-            'hash': {'S': hash}
+            'hash': {'S': hash},
+            'ttl':{'S': long(time.time())}
             }
         )
     print(response)
